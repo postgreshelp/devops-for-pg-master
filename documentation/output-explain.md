@@ -266,3 +266,253 @@ liquibase history   # 003 row gone
 liquibase status    # shows 1 changeset pending (003 ready to re-apply)
 liquibase update    # re-applies 003 if needed
 ```
+
+## `ansible-playbook playbooks/liquibase_deploy.yml` — Full Output
+
+---
+
+### Play 1 of 2 — Deploy
+
+```
+PLAY [Deploy database changes using Liquibase]
+```
+
+```
+Two plays in one playbook file:
+  Play 1  → always runs  (deploy)
+  Play 2  → only runs with --tags rollback (rollback)
+            but here it ran because the playbook has no when: guard on the play
+```
+
+---
+
+#### TASK: Check Liquibase installation
+
+```
+ok: [localhost]
+interpreter at /usr/bin/python3.9 ...
+```
+
+```
+Warning = informational only, not an error.
+Ansible found Python at /usr/bin/python3.9 automatically.
+Nothing to fix — this fires once per play on every run.
+```
+
+---
+
+#### TASK: Display Liquibase version
+
+```
+"Liquibase Version: 5.0.4"
+"Java Home: /usr/lib/jvm/java-21-amazon-corretto.x86_64 (Version 21.0.12.1)"
+```
+
+```
+Liquibase 5.0.4 running on Java 21 (Amazon Corretto)
+JDBC driver: postgresql.jar 42.7.8
+
+version check = confirms the tool exists before doing any database work
+```
+
+---
+
+#### TASK: Validate Liquibase changelog
+
+```
+ok: [localhost]
+stdout_lines: []
+```
+
+```
+Empty stdout = clean validation
+Liquibase parsed all three changelog files without errors
+No missing files, no syntax problems, no unknown changesets
+```
+
+---
+
+#### TASK: Check Liquibase status
+
+```
+"1 changeset has not been applied to postgres@jdbc:postgresql://..."
+"     changelog/003-add-column.sql::003::paylite"
+```
+
+```
+DATABASECHANGELOG state before this run:
+
+  001  applied  (create schema)
+  002  applied  (create table)   <- v1.0 tag is here
+  003  PENDING  (add column)     <- status shows this one
+
+status = diff between master changelog and DATABASECHANGELOG
+```
+
+---
+
+#### TASK: Apply Liquibase changes
+
+```
+changed: [localhost]
+```
+
+```
+UPDATE SUMMARY
+Run:                          1   <- 003 applied now
+Previously run:               2   <- 001 and 002 already recorded, skipped
+Filtered out:                 0   <- nothing excluded
+-------------------------------
+Total change sets:            3   <- master changelog has 3 includes
+```
+
+```
+"changed" = Ansible registered that something actually changed in the system
+"ok"      = would mean nothing changed (all changesets already applied)
+```
+
+---
+
+#### TASK: Tag the database state after successful deploy
+
+```
+changed: [localhost]
+stdout_lines: []
+```
+
+```
+liquibase tag v2.0  (as written in the playbook)
+
+DATABASECHANGELOG after tag:
+  001  |
+  002  | v1.0
+  003  | v2.0   <- tag written on the last applied row
+
+Empty stdout = success. Liquibase only prints on error or with --log-level.
+```
+
+---
+
+#### TASK: Verify PayLite employee table
+
+```
+"employee_table.query_result": [
+    {
+        "table_name": "employee",
+        "table_schema": "paylite"
+    }
+]
+```
+
+FROM   information_schema.tables
+WHERE  table_schema = 'paylite'
+  AND  table_name   = 'employee';
+
+1 row returned -> table exists -> deploy confirmed
+```
+
+---
+
+### Play 2 of 2 — Rollback
+
+```
+PLAY [Rollback database changes using Liquibase]
+```
+
+---
+
+#### TASK: Check current Liquibase status before rollback
+
+```
+"postgres@jdbc:postgresql://...is up to date"
+```
+
+```
+```
+
+---
+
+#### TASK: Rollback to tag v1.0
+
+```
+changed: [localhost]
+stdout_lines: []
+```
+
+```
+liquibase rollback --tag v1.0
+
+What Liquibase did:
+  Find v1.0 in DATABASECHANGELOG
+  Identify every changeset applied AFTER v1.0
+  Roll them back in REVERSE order
+
+  003 (add column)  -> runs: ALTER TABLE paylite.employee DROP COLUMN salary2
+  002 untouched     <- 002 IS v1.0, not after it
+  001 untouched
+
+DATABASECHANGELOG after rollback:
+  001  |
+  002  | v1.0   <- last row. 003 row removed.
+```
+
+---
+
+#### TASK: Verify employee table is gone after rollback
+
+```
+"msg": "WARNING — table still exists after rollback, investigate"
+```
+
+```
+This warning fired because the playbook verification checks:
+  "is the employee table gone?"
+
+But rollback to v1.0 only undid changeset 003 (add column).
+Changeset 002 (CREATE TABLE) is AT v1.0, not after it — so the table
+still exists. That is CORRECT behaviour.
+
+The verify task is checking the wrong thing.
+What it should check instead:
+  SELECT column_name FROM information_schema.columns
+  WHERE  table_schema = 'paylite'
+    AND  table_name   = 'employee'
+    AND  column_name  = 'salary2';
+
+  0 rows = rollback succeeded (salary2 column dropped)
+```
+
+---
+
+### PLAY RECAP
+
+```
+localhost : ok=18  changed=3  unreachable=0  failed=0  skipped=0
+```
+
+```
+ok=18      -> 18 tasks ran and passed
+changed=3  -> 3 tasks actually changed state:
+               1. liquibase update  (applied 003)
+               2. liquibase tag     (wrote v2.0)
+               3. liquibase rollback (dropped salary2 column)
+failed=0   -> clean run end to end
+```
+
+---
+
+### Key Takeaway — rollback scope
+
+```
+rollback --tag v1.0
+    |
+    +-- undoes: everything AFTER v1.0
+    +-- keeps:  everything AT or BEFORE v1.0
+
+v1.0 was tagged after 001 + 002.
+So 001 (schema) and 002 (table) survive the rollback.
+Only 003 (add column salary2) was undone.
+
+To remove the table you would need to rollback past v1.0 — to a point
+before 002 was applied — using rollbackCount or a tag set before 002.
+```

@@ -1,0 +1,26 @@
+# Normalize all text files to LF in the repository.
+# Git will convert to CRLF on Windows checkout automatically.
+* text=auto eol=lf
+
+# Terraform
+*.tf        text eol=lf
+*.tfvars    text eol=lf
+
+# Ansible / YAML
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.cfg       text eol=lf
+*.ini       text eol=lf
+
+# Liquibase / SQL
+*.sql       text eol=lf
+*.properties text eol=lf
+
+# Docs
+*.md        text eol=lf
+
+# Binary — never touch line endings
+*.pdf       binary
+*.jar       binary
+*.png       binary
+*.jpg       binary

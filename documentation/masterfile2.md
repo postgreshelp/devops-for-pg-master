@@ -8,7 +8,7 @@ cd ansible-postgresql
 ### Install software
 
 ```
-sudodnf install -y java-21-amazon-corretto ansible-core
+sudo dnf install -y java-21-amazon-corretto ansible-core
 ansible --version
 
 wget https://github.com/liquibase/liquibase/releases/download/v5.0.4/liquibase-5.0.4.tar.gz

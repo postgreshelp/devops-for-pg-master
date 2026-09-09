@@ -83,3 +83,74 @@ To silence it permanently, pin the interpreter in group_vars/postgresql.yml:
 `--graph` confirmed the host is in the right group.
 `ping` confirms Ansible can actually **connect** to that host and **execute** on it.
 These two together are the full pre-flight check before running any playbook.
+
+## `ansible-playbook playbooks/postgresql_role.yml`
+
+```
+PLAY [Manage PostgreSQL roles] ***************************************
+
+TASK [Create application role] ***************************************
+localhost | ok => {
+    "changed": false
+}
+
+PLAY RECAP ***********************************************************
+localhost : ok=1    changed=0    unreachable=0    failed=0
+```
+
+**What each part means:**
+
+```
+PLAY [Manage PostgreSQL roles]
+      │
+      └── play name from the playbook — confirms the right playbook ran
+
+TASK [Create application role]
+      │
+      └── task name — one task in this playbook
+
+localhost | ok
+      │       │
+      │       └── ok = task ran successfully, no error
+      └── the host it ran against
+
+"changed": false
+      │
+      └── role already existed OR was just created
+          if created for the first time → changed: true
+          if role already existed       → changed: false  (idempotent — no duplicate)
+```
+
+**PLAY RECAP — read this first after every playbook run:**
+
+```
+localhost : ok=1    changed=0    unreachable=0    failed=0
+             │         │              │               │
+             │         │              │               └── failed tasks — must be 0
+             │         │              └── hosts Ansible could not connect to — must be 0
+             │         └── tasks that actually modified something
+             └── tasks that ran without error (including no-change tasks)
+
+ok=1, failed=0  → playbook succeeded
+changed=0       → role already existed, nothing modified (idempotent re-run)
+changed=1       → role was created for the first time
+```
+
+**What ran in PostgreSQL:**
+
+```sql
+CREATE ROLE paylite_app WITH LOGIN PASSWORD 'PayliteApp123!';
+-- community.postgresql.postgresql_user with state: present
+-- "user" in Ansible = role with LOGIN privilege in PostgreSQL
+```
+
+**The WARNING — harmless (same as ansible ping):**
+
+```
+[WARNING]: Platform linux on host localhost is using the discovered
+           Python interpreter at /usr/bin/python3.9
+      │
+      └── Ansible auto-detected Python — not an error
+          silence it by adding to group_vars/postgresql.yml:
+          ansible_python_interpreter: /usr/bin/python3.9
+```

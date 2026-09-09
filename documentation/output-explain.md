@@ -516,3 +516,163 @@ Only 003 (add column salary2) was undone.
 To remove the table you would need to rollback past v1.0 — to a point
 before 002 was applied — using rollbackCount or a tag set before 002.
 ```
+
+## Jenkins Build — `ansible-playbook playbooks/liquibase_deploy.yml`
+
+---
+
+### Jenkins Header
+
+```
+Started by user admin
+Running as SYSTEM
+Building in workspace /var/lib/jenkins/workspace/create jon
+```
+
+```
+Started by user admin   -> admin clicked "Build Now" in Jenkins UI
+Running as SYSTEM       -> Jenkins daemon user on the Linux host
+Workspace               -> /var/lib/jenkins/workspace/create jon
+                           Jenkins creates one workspace folder per job
+```
+
+```
+Jenkins build flow:
+  admin clicks Build Now
+       |
+       v
+  Jenkins SYSTEM user
+       |
+       v
+  /bin/sh -xe /tmp/jenkins887866345099254812.sh   <- generated temp script
+       |
+       +-- cd /opt/devops-for-pg-master           <- your repo location
+       +-- ansible-playbook playbooks/liquibase_deploy.yml
+```
+
+```
+/bin/sh flags:
+  -x  -> echo every command before running it (visible in build log)
+  -e  -> exit immediately if any command returns non-zero
+         this is why Jenkins marks the build FAILED on first error
+```
+
+---
+
+### Shell Commands Logged
+
+```
++ cd /opt/devops-for-pg-master
++ ansible-playbook playbooks/liquibase_deploy.yml
+```
+
+```
+The + prefix = -x flag printing each command before execution
+Two commands Jenkins ran:
+  1. cd to the repo directory
+  2. run the playbook
+```
+
+---
+
+### Play 1 — Deploy
+
+Same execution as manual run. Key results:
+
+```
+TASK: Validate    -> ok      (changelog syntax clean)
+TASK: Status      -> 003 pending
+TASK: Update      -> changed (003 applied, Run: 1)
+TASK: Tag         -> changed (v2.0 written to DATABASECHANGELOG)
+TASK: Verify      -> employee table present
+```
+
+```
+changed: [localhost] means Ansible detected a real state change
+ok:      [localhost] means state already matched — nothing to do
+```
+
+---
+
+### Play 2 — Rollback
+
+```
+TASK: Status before rollback  -> "is up to date"  (all 3 applied)
+TASK: Rollback to v1.0        -> changed
+TASK: Verify table gone       -> WARNING — table still exists
+```
+
+```
+WARNING is expected — this is correct rollback behaviour.
+
+Rollback to v1.0 timeline:
+  001 create schema  ]
+  002 create table   ] <- v1.0 tag  (these survive rollback)
+  003 add column     ]              (this gets undone: DROP COLUMN salary2)
+
+The employee table still exists because it was created by 002,
+which is AT v1.0 — not after it.
+
+The playbook verify task checks "is table gone?" which is the wrong
+question for a column-level rollback. The correct check is:
+  SELECT column_name FROM information_schema.columns
+  WHERE  table_schema = 'paylite'
+    AND  table_name   = 'employee'
+    AND  column_name  = 'salary2';
+  -- 0 rows = rollback succeeded
+```
+
+---
+
+### PLAY RECAP
+
+```
+localhost : ok=18  changed=3  unreachable=0  failed=0  skipped=0
+```
+
+```
+ok=18      -> 18 tasks completed
+changed=3  -> update + tag + rollback
+failed=0   -> no task returned a non-zero exit code
+```
+
+---
+
+### Jenkins Footer
+
+```
+Finished: SUCCESS
+```
+
+```
+Jenkins build statuses:
+  SUCCESS  -> all shell commands exited 0
+  FAILURE  -> a command exited non-zero (because of -e flag)
+  UNSTABLE -> tests ran but some failed (not applicable here)
+  ABORTED  -> user cancelled mid-run
+
+"Finished: SUCCESS" here means:
+  ansible-playbook returned exit code 0
+  Jenkins recorded the build as green
+```
+
+---
+
+### Manual vs Jenkins — What Changed
+
+```
+Manual run:
+  cd /opt/devops-for-pg-master
+  ansible-playbook playbooks/liquibase_deploy.yml
+
+Jenkins run:
+  /bin/sh -xe <temp-script>
+    cd /opt/devops-for-pg-master
+    ansible-playbook playbooks/liquibase_deploy.yml
+
+Result:   identical — same playbook, same Aurora endpoint, same output
+Benefit:  Jenkins gives you a build history, timestamps, and logs
+          you can trigger this from a git push (pipeline trigger)
+          without SSH-ing into the server
+```
+

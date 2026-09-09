@@ -97,6 +97,7 @@ liquibase history
 liquibase tag v1.0
 cp changelog/002-create-table.sql changelog/003-add-column.sqlcat 
 ```
+```
 --liquibase formatted sql
 
 --changeset paylite:003
@@ -104,6 +105,7 @@ cp changelog/002-create-table.sql changelog/003-add-column.sqlcat
 alter table paylite.employee add column salary2 int;
 
 --rollback ALTER TABLE paylite.employee DROP COLUMN salary2;
+```
 ```
 
 edit db.changelog-master.yaml

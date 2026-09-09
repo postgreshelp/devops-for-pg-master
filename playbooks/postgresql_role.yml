@@ -36,7 +36,9 @@
         name:     paylite_app
         password: "PayliteApp123!"
         state:    present
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
       become: false
-      # NOTE: login_* arguments are missing here intentionally — this is a minimal
-      # example. In practice, add login_host / login_port / login_user / login_password
-      # (from group_vars/postgresql.yml) so it connects to the remote Aurora cluster.

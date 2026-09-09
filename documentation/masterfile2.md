@@ -172,7 +172,7 @@ Build Steps → Add build step → Execute shell
 
 Enter:
 
-cd /root/devops-for-pg-master
+cd /opt/devops-for-pg-master
 
 ansible-playbook playbooks/liquibase_deploy.yml
 

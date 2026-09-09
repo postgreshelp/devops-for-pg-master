@@ -1,0 +1,253 @@
+# liquibase_deploy.yml — Ansible-driven Liquibase deployment playbook
+# PURPOSE: applies database migrations with Liquibase, tags the state after
+# a successful deploy, and demonstrates how to roll back if needed.
+#
+# WHY run Liquibase through Ansible instead of directly?
+#   Ansible provides idempotent orchestration around shell commands:
+#   logging, error handling, and the ability to mix shell tools (Liquibase)
+#   with module-based tasks (postgresql_query) in one workflow.
+#
+# Liquibase command order (always follow this sequence):
+#   1. --version  → confirm Liquibase is installed and on PATH
+#   2. validate   → check changelog files are well-formed (no DB changes)
+#   3. status     → show which changesets are pending (no DB changes)
+#   4. update     → apply pending changesets to the database
+#   5. tag        → bookmark the current state so you can roll back to it by name
+#
+# To roll back (run the rollback play at the bottom):
+#   ansible-playbook playbooks/liquibase_deploy.yml --tags rollback
+#
+# Normal deploy (no rollback):
+#   ansible-playbook playbooks/liquibase_deploy.yml
+
+---
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PLAY 1 — DEPLOY
+# Validates, applies, and tags the database migration.
+# ═════════════════════════════════════════════════════════════════════════════
+- name: Deploy database changes using Liquibase
+  hosts: postgresql
+  gather_facts: false
+
+  tasks:
+
+    # ── Step 1: confirm Liquibase is reachable ────────────────────────────────
+    # ansible.builtin.command — runs a shell command on the target host.
+    # cmd: liquibase --version   prints the installed version to stdout.
+    # changed_when: false        tells Ansible this task never "changes" anything
+    #                            (version check is read-only), so it always shows "ok".
+    - name: Check Liquibase installation
+      ansible.builtin.command:
+        cmd: liquibase --version
+      register: liquibase_version
+      changed_when: false   # read-only — mark as ok, not changed
+      tags: [deploy, rollback]  # run during both deploy and rollback plays
+
+    - name: Display Liquibase version
+      ansible.builtin.debug:
+        var: liquibase_version.stdout_lines
+      tags: [deploy, rollback]
+
+
+    # ── Step 2: validate the changelog ───────────────────────────────────────
+    # liquibase validate — parses changelog files and checks them for errors.
+    # Makes NO connection to the database, makes NO changes.
+    # chdir: "{{ playbook_dir }}/../liquibase"
+    #   playbook_dir = the directory this playbook file lives in (playbooks/)
+    #   ../liquibase  = one level up, then into the liquibase/ folder
+    - name: Validate Liquibase changelog
+      ansible.builtin.command:
+        cmd:   liquibase validate
+        chdir: "{{ playbook_dir }}/../liquibase"
+      register: liquibase_validate
+      changed_when: false
+      tags: deploy
+
+    - name: Display Liquibase validation
+      ansible.builtin.debug:
+        var: liquibase_validate.stdout_lines
+      tags: deploy
+
+
+    # ── Step 3: check pending changesets ─────────────────────────────────────
+    # liquibase status — connects to the database, reads DATABASECHANGELOG,
+    # and lists changesets that have NOT been applied yet.
+    # Makes NO schema changes — safe to run at any time.
+    # If all changesets are already applied, returns "is up to date".
+    - name: Check Liquibase status
+      ansible.builtin.command:
+        cmd:   liquibase status
+        chdir: "{{ playbook_dir }}/../liquibase"
+      register: liquibase_status
+      changed_when: false
+      tags: deploy
+
+    - name: Display Liquibase status
+      ansible.builtin.debug:
+        var: liquibase_status.stdout_lines
+      tags: deploy
+
+
+    # ── Step 4: apply pending changesets ─────────────────────────────────────
+    # liquibase update — applies every pending changeset IN ORDER.
+    # After each changeset runs, Liquibase inserts a row into DATABASECHANGELOG
+    # so it will never run that changeset again.
+    # changed_when is NOT set to false — this task DOES change the database.
+    - name: Apply Liquibase changes
+      ansible.builtin.command:
+        cmd:   liquibase update
+        chdir: "{{ playbook_dir }}/../liquibase"
+      register: liquibase_update
+      tags: deploy
+
+    - name: Display Liquibase update result
+      ansible.builtin.debug:
+        var: liquibase_update.stdout_lines
+      tags: deploy
+
+
+    # ── Step 5: tag the current state ────────────────────────────────────────
+    # liquibase tag <name> — bookmarks the current database state with a label.
+    # Tags are stored in DATABASECHANGELOG alongside changeset rows.
+    #
+    # WHY tag after a successful deploy?
+    #   Without a tag, rollback requires counting changesets:
+    #     liquibase rollbackCount 2   (error-prone — you have to count manually)
+    #   With a tag, rollback is clear and safe:
+    #     liquibase rollback v1.0     (unambiguous — rolls back to this exact point)
+    #
+    # Tag naming convention: use the version or sprint number so it is obvious
+    # what "before" and "after" mean when reading DATABASECHANGELOG.
+    - name: Tag the database state after successful deploy
+      ansible.builtin.command:
+        cmd:   liquibase tag v1.0
+        chdir: "{{ playbook_dir }}/../liquibase"
+      register: liquibase_tag
+      tags: deploy
+
+    - name: Display tag result
+      ansible.builtin.debug:
+        var: liquibase_tag.stdout_lines
+      tags: deploy
+
+
+    # ── Step 6: verify the result with a direct DB query ─────────────────────
+    # After Liquibase runs, confirm the expected table actually exists.
+    # Cross-checks Liquibase's success message against the real schema.
+    #
+    # Expected: one row returned → table exists.
+    # Empty result → Liquibase reported success but the table is missing — investigate.
+    - name: Verify PayLite employee table
+      community.postgresql.postgresql_query:
+        query: |
+          SELECT
+              table_schema,
+              table_name
+          FROM information_schema.tables
+          WHERE table_schema = 'paylite'
+            AND table_name   = 'employee';
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: employee_table
+      tags: deploy
+
+    - name: Display PayLite employee table
+      ansible.builtin.debug:
+        var: employee_table.query_result
+      tags: deploy
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PLAY 2 — ROLLBACK
+# Undoes all changesets back to the v1.0 tag (i.e., the state before deploy).
+#
+# Run this play with:
+#   ansible-playbook playbooks/liquibase_deploy.yml --tags rollback
+#
+# What Liquibase does internally:
+#   1. Reads DATABASECHANGELOG and finds the v1.0 tag row
+#   2. Identifies every changeset applied AFTER v1.0
+#   3. Runs each --rollback block IN REVERSE ORDER:
+#        rollback 002 → DROP TABLE paylite.employee
+#        rollback 001 → DROP SCHEMA paylite
+#   4. Removes those changeset rows from DATABASECHANGELOG
+#      so `liquibase update` will re-apply them next time
+#
+# After rollback, the database is exactly as it was before the deploy.
+# Running `liquibase update` again will re-apply the changesets forward.
+# This is what "version control for the database" means.
+# ═════════════════════════════════════════════════════════════════════════════
+- name: Rollback database changes using Liquibase
+  hosts: postgresql
+  gather_facts: false
+  tags: rollback
+
+  tasks:
+
+    # ── Show what is currently applied ───────────────────────────────────────
+    # See the current state before touching anything — good practice before rollback.
+    - name: Check current Liquibase status before rollback
+      ansible.builtin.command:
+        cmd:   liquibase status
+        chdir: "{{ playbook_dir }}/../liquibase"
+      register: pre_rollback_status
+      changed_when: false
+
+    - name: Display status before rollback
+      ansible.builtin.debug:
+        var: pre_rollback_status.stdout_lines
+
+
+    # ── Roll back to tag ──────────────────────────────────────────────────────
+    # liquibase rollback <tag>
+    #                     │
+    #                     └── the tag name set during deploy (Step 5 above)
+    #
+    # Liquibase runs the --rollback block from each affected changeset in reverse:
+    #   changeset 002 rollback: DROP TABLE paylite.employee
+    #   changeset 001 rollback: DROP SCHEMA paylite
+    #
+    # If a changeset has NO --rollback block, Liquibase stops and errors here.
+    # That is why we added --rollback blocks to every changeset file.
+    - name: Rollback to tag v1.0
+      ansible.builtin.command:
+        cmd:   liquibase rollback v1.0
+        chdir: "{{ playbook_dir }}/../liquibase"
+      register: liquibase_rollback
+
+    - name: Display rollback result
+      ansible.builtin.debug:
+        var: liquibase_rollback.stdout_lines
+
+
+    # ── Confirm rollback succeeded ────────────────────────────────────────────
+    # After rollback, the table should NOT exist.
+    # Expected: empty result (zero rows) — the schema and table are gone.
+    - name: Verify employee table is gone after rollback
+      community.postgresql.postgresql_query:
+        query: |
+          SELECT
+              table_schema,
+              table_name
+          FROM information_schema.tables
+          WHERE table_schema = 'paylite'
+            AND table_name   = 'employee';
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: post_rollback_check
+
+    - name: Display post-rollback verification
+      ansible.builtin.debug:
+        msg: >-
+          {{
+            'ROLLBACK CONFIRMED — table does not exist'
+            if post_rollback_check.query_result | length == 0
+            else 'WARNING — table still exists after rollback, investigate'
+          }}

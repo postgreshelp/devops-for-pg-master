@@ -1,0 +1,256 @@
+# postgresql_admin_full.yml — full DBA operations playbook
+# PURPOSE: demonstrates 9 real DBA tasks an Ansible playbook can automate against
+# a live PostgreSQL / Aurora cluster. Each task group is a separate admin concern.
+#
+# Run it:
+#   ansible-playbook playbooks/postgresql_admin_full.yml
+#
+# All login_* values come from inventory/group_vars/postgresql.yml
+# via Jinja2 templating: "{{ variable_name }}"
+
+---
+- name: PostgreSQL Administration
+  hosts: postgresql
+  gather_facts: false
+
+  tasks:
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 1. VERSION CHECK
+    # Confirms connectivity and logs exactly which engine version is running.
+    # Good first task in any playbook — if this fails, no point continuing.
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Collect PostgreSQL version
+      community.postgresql.postgresql_query:
+        query: "SELECT version();"
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: postgres_version
+
+    - name: Display PostgreSQL version
+      ansible.builtin.debug:
+        var: postgres_version.query_result
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 2. DATABASE SIZE
+    # pg_database_size(datname) returns bytes; pg_size_pretty formats it
+    # as "8192 bytes", "512 MB", "1.2 GB" etc. — human-readable at a glance.
+    # ORDER BY size DESC puts the largest database first.
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Check database sizes
+      community.postgresql.postgresql_query:
+        query: |
+          SELECT
+              datname AS database_name,
+              pg_size_pretty(pg_database_size(datname)) AS database_size
+          FROM pg_database
+          ORDER BY pg_database_size(datname) DESC;
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: database_sizes
+
+    - name: Display database sizes
+      ansible.builtin.debug:
+        var: database_sizes.query_result
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 3. CONNECTION COUNT
+    # pg_stat_activity has one row per backend (connection).
+    # count(*) tells you how many connections are currently open.
+    # Compare this against max_connections (checked in task 9) to see headroom.
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Check PostgreSQL connections
+      community.postgresql.postgresql_query:
+        query: |
+          SELECT
+              count(*) AS total_connections
+          FROM pg_stat_activity;
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: connection_count
+
+    - name: Display connection count
+      ansible.builtin.debug:
+        var: connection_count.query_result
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 4. ACTIVE SESSIONS
+    # WHERE state = 'active' — only sessions currently executing a query.
+    # wait_event_type / wait_event — what the session is waiting on (lock, IO, etc.)
+    # This is the first place to look during a performance incident.
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Check active PostgreSQL sessions
+      community.postgresql.postgresql_query:
+        query: |
+          SELECT
+              pid,
+              usename          AS username,
+              datname          AS database_name,
+              client_addr,
+              state,
+              query_start,
+              wait_event_type,
+              wait_event,
+              query
+          FROM pg_stat_activity
+          WHERE state = 'active'
+          ORDER BY query_start;
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: active_sessions
+
+    - name: Display active sessions
+      ansible.builtin.debug:
+        var: active_sessions.query_result
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 5. REPLICATION STATUS
+    # pg_stat_replication — one row per connected standby/replica.
+    # sent_lsn / write_lsn / flush_lsn / replay_lsn show the replication lag
+    # at each stage of the WAL pipeline. Empty result = no replicas connected
+    # (normal for a single-node Aurora instance in a lab).
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Check replication information
+      community.postgresql.postgresql_query:
+        query: |
+          SELECT
+              application_name,
+              client_addr,
+              state,
+              sync_state,
+              sent_lsn,
+              write_lsn,
+              flush_lsn,
+              replay_lsn
+          FROM pg_stat_replication;
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: replication_info
+
+    - name: Display replication information
+      ansible.builtin.debug:
+        var: replication_info.query_result
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 6. CREATE A ROLE
+    # community.postgresql.postgresql_user creates a PostgreSQL role (user).
+    # state: present — idempotent: if the role already exists, do nothing.
+    # state: absent  — would drop the role.
+    #
+    # postgresql_user vs postgresql_query:
+    #   postgresql_user  — declarative, idempotent (safe to re-run)
+    #   postgresql_query — runs raw SQL (you control idempotency yourself)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Create reporting role
+      community.postgresql.postgresql_user:
+        name:     paylite_reporting
+        password: "Reporting123!"
+        state:    present              # create if missing, leave alone if exists
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 7. GRANT PRIVILEGES
+    # community.postgresql.postgresql_privs manages GRANT / REVOKE.
+    # type: database  — we are granting a privilege ON the database object itself.
+    # privs: CONNECT  — allows the role to open a connection to the database.
+    #                   Without CONNECT, the role cannot log in at all.
+    # state: present  — idempotent (safe to re-run; won't error if already granted).
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Grant CONNECT privilege on database
+      community.postgresql.postgresql_privs:
+        database: "{{ postgresql_database }}"
+        type:     database
+        roles:    paylite_reporting
+        privs:    CONNECT
+        state:    present
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 8. MAINTENANCE — ANALYZE
+    # ANALYZE updates the query planner's statistics for every table.
+    # The planner uses these statistics to choose efficient query plans.
+    # Run after bulk inserts or major data changes.
+    # VACUUM would reclaim dead-row space; ANALYZE only updates statistics.
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Run ANALYZE on current database
+      community.postgresql.postgresql_query:
+        query: "ANALYZE;"
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: analyze_result
+
+    - name: Display ANALYZE result
+      ansible.builtin.debug:
+        var: analyze_result
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 9. KEY CONFIGURATION SETTINGS
+    # pg_settings — one row per GUC (Grand Unified Configuration) parameter.
+    # These five settings are the most common tuning levers for a DBA:
+    #
+    #   max_connections       — hard cap on concurrent connections
+    #   shared_buffers        — PostgreSQL's own in-memory cache size
+    #   work_mem              — memory per sort/hash operation per query
+    #   maintenance_work_mem  — memory for VACUUM, CREATE INDEX, etc.
+    #   effective_cache_size  — hint to the planner about total OS+PG cache
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Collect PostgreSQL configuration information
+      community.postgresql.postgresql_query:
+        query: |
+          SELECT
+              name,
+              setting,
+              unit,
+              short_desc
+          FROM pg_settings
+          WHERE name IN (
+              'max_connections',
+              'shared_buffers',
+              'work_mem',
+              'maintenance_work_mem',
+              'effective_cache_size'
+          )
+          ORDER BY name;
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: postgres_configuration
+
+    - name: Display PostgreSQL configuration
+      ansible.builtin.debug:
+        var: postgres_configuration.query_result

@@ -1,0 +1,96 @@
+# group_vars/postgresql.yml — group variable file for the [postgresql] group
+#
+# Any variable defined here is automatically loaded for every host in the
+# [postgresql] inventory group — no import or include needed in the playbook.
+#
+# ── HOW ANSIBLE FINDS THIS FILE ──────────────────────────────────────────────
+#
+#   File path resolution:
+#
+#   inventory/
+#   └── group_vars/
+#       └── postgresql.yml      ← filename must match the group name exactly
+#
+#   group_vars/postgresql.yml
+#                │
+#                └── must match [postgresql] in inventory/hosts — case-sensitive
+#
+#   Ansible also accepts a directory:
+#     group_vars/postgresql/    ← all .yml files inside are merged automatically
+#     group_vars/postgresql/connection.yml
+#     group_vars/postgresql/tuning.yml
+#   Useful when the variable file grows large — split by concern.
+#
+# ── VARIABLE RESOLUTION ORDER (later overrides earlier) ──────────────────────
+#
+#   1. inventory file inline vars   (e.g. localhost key=val in hosts file)
+#   2. group_vars/all.yml           (variables for every group)
+#   3. group_vars/postgresql.yml    ← THIS FILE
+#   4. host_vars/localhost.yml      (host-specific overrides)
+#   5. playbook vars:               (defined inside the playbook itself)
+#   6. extra-vars (-e)              (passed on the command line — highest priority)
+#
+#   Example override at runtime (useful for testing against a different DB):
+#     ansible-playbook playbooks/postgresql_admin.yml \
+#       -e "postgresql_host=other-rds.amazonaws.com postgresql_database=staging"
+#
+# ── HOW PLAYBOOKS USE THESE VARIABLES ────────────────────────────────────────
+#
+#   Jinja2 double-brace syntax:
+#
+#   login_host: "{{ postgresql_host }}"
+#                │                  │
+#                └──────────────────┘
+#                Ansible replaces this at runtime with the value from this file.
+#                The quotes are required when the entire value is a variable —
+#                YAML would otherwise misinterpret the curly braces.
+#
+# ── SECURING THIS FILE IN PRODUCTION ─────────────────────────────────────────
+#
+#   This file contains a plaintext password — never commit that to a shared repo.
+#   Use ansible-vault to encrypt the file at rest:
+#
+#   Encrypt:
+#     ansible-vault encrypt inventory/group_vars/postgresql.yml
+#     → prompts for a vault password, then rewrites the file as ciphertext
+#
+#   Run a playbook with an encrypted vars file:
+#     ansible-playbook playbooks/postgresql_admin.yml --ask-vault-pass
+#     → prompts for the vault password at runtime, decrypts in memory only
+#
+#   View/edit the encrypted file without decrypting it on disk:
+#     ansible-vault view inventory/group_vars/postgresql.yml
+#     ansible-vault edit inventory/group_vars/postgresql.yml
+#
+#   Decrypt back to plaintext (only when needed):
+#     ansible-vault decrypt inventory/group_vars/postgresql.yml
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+---
+
+# The Aurora RDS cluster endpoint provisioned by Terraform in aws-aurora.tf.
+# This is the hostname Ansible AND Liquibase both connect to.
+# If you rebuild the Aurora cluster, update this value — nothing else changes.
+postgresql_host: "mypgrds.cijxwe4ckz1m.us-east-1.rds.amazonaws.com"
+
+# Default PostgreSQL port.
+# Aurora PostgreSQL uses 5432 — change only if your cluster is on a custom port.
+postgresql_port: 5432
+
+# The master username set when the Aurora cluster was created (in aws-aurora.tf:
+#   master_username = "postgres").
+# This user has superuser privileges on the cluster.
+postgresql_admin_user: "postgres"
+
+# LAB ONLY — plaintext password matching aws-aurora.tf: master_password = "postgres"
+# In production:
+#   Option 1 — ansible-vault encrypt this file (see instructions above)
+#   Option 2 — use AWS Secrets Manager and retrieve the password with a lookup:
+#     postgresql_admin_password: "{{ lookup('aws_ssm', '/paylite/db/password') }}"
+postgresql_admin_password: "postgres"
+
+# The database to connect to for administrative tasks.
+# "postgres" is the default system database that always exists on a PostgreSQL cluster.
+# Application tables (paylite.employee) live here after Liquibase runs.
+postgresql_database: "postgres"

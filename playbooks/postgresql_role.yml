@@ -1,0 +1,42 @@
+# postgresql_role.yml — minimal role creation playbook
+# PURPOSE: teaching example — shows the smallest possible playbook that
+# creates a PostgreSQL role using the declarative postgresql_user module.
+#
+# Run it:
+#   ansible-playbook playbooks/postgresql_role.yml
+#
+# KEY CONCEPT — idempotency:
+# Running this playbook 10 times has the same result as running it once.
+# If paylite_app already exists, Ansible reports "ok" (no change) not an error.
+# This is what "state: present" buys you — declarative, not procedural.
+#
+# Compare to raw SQL:  CREATE USER paylite_app ...
+#   → fails with "role already exists" on the second run
+#   → you'd have to write CREATE USER IF NOT EXISTS to match this behaviour
+
+---
+- name: Manage PostgreSQL roles
+  hosts: postgresql
+  gather_facts: false
+
+  tasks:
+
+    # community.postgresql.postgresql_user
+    #  │              │         │
+    #  │              │         └── module: manages PostgreSQL roles/users
+    #  │              └── namespace (collection installed via ansible-galaxy)
+    #  └── collection prefix
+    #
+    # name:     the role name to create in PostgreSQL
+    # password: set a login password for the role
+    # state:    present = create if missing / absent = drop if exists
+    # become: false — do NOT try to switch to root; connect directly as the DB admin
+    - name: Create application role
+      community.postgresql.postgresql_user:
+        name:     paylite_app
+        password: "PayliteApp123!"
+        state:    present
+      become: false
+      # NOTE: login_* arguments are missing here intentionally — this is a minimal
+      # example. In practice, add login_host / login_port / login_user / login_password
+      # (from group_vars/postgresql.yml) so it connects to the remote Aurora cluster.

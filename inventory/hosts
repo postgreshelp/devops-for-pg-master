@@ -1,0 +1,69 @@
+# inventory/hosts — static inventory file
+#
+# Tells Ansible WHICH machines exist and HOW to connect to them.
+# This file is loaded because ansible.cfg sets:  inventory = ./inventory/hosts
+#
+# ── INVENTORY FILE ANATOMY ────────────────────────────────────────────────────
+#
+#   [group_name]                    ← square brackets = group definition
+#   hostname  connection_var=val    ← one host per line + optional inline variables
+#
+# ── HOW GROUPS LINK TO PLAYBOOKS ─────────────────────────────────────────────
+#
+#   inventory/hosts          playbook
+#   ───────────────          ───────────────────────────────
+#   [postgresql]      →      hosts: postgresql
+#    │                        │
+#    └── group name            └── must match exactly — case-sensitive
+#
+#   Ansible runs the play against every host listed under the matching group.
+#   If the group is empty, the play is skipped with "skipping: no hosts matched".
+#
+# ── HOW TO SCALE THIS TO MULTIPLE HOSTS ──────────────────────────────────────
+#
+#   [postgresql]
+#   db-primary   ansible_host=10.0.1.10  ansible_user=ec2-user
+#   db-replica1  ansible_host=10.0.1.11  ansible_user=ec2-user
+#   db-replica2  ansible_host=10.0.1.12  ansible_user=ec2-user
+#
+#   Ansible runs the playbook on all three in parallel (forks).
+#   The play above (localhost, local connection) is the lab shortcut —
+#   in production, replace localhost with real hostnames or IPs.
+#
+# ── COMMON ANSIBLE CONNECTION VARIABLES ──────────────────────────────────────
+#
+#   ansible_connection=local    → do not use SSH; run directly on this machine
+#   ansible_connection=ssh      → default; connect via SSH
+#   ansible_host=<ip>           → override the IP/hostname to connect to
+#   ansible_user=<user>         → SSH login user (default: current OS user)
+#   ansible_port=<port>         → SSH port (default: 22)
+#   ansible_ssh_private_key_file=~/.ssh/id_rsa   → path to SSH private key
+#
+# ── VERIFY THIS INVENTORY ─────────────────────────────────────────────────────
+#
+#   ansible-inventory --graph
+#     Shows the full group/host tree — confirm your host is in the right group.
+#     Expected output:
+#       @all:
+#         |--@postgresql:
+#         |  |--localhost
+#         |--@ungrouped:
+#
+#   ansible postgresql -m ping
+#     Runs the ping module against every host in [postgresql].
+#     For ansible_connection=local this just checks Python is available.
+#     Expected output:
+#       localhost | SUCCESS => { "ping": "pong" }
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+[postgresql]
+# localhost           — the target host (this machine)
+# ansible_connection  — how to connect: local = no SSH, run directly on this machine
+#
+# localhost ansible_connection=local
+#  │         │                  │
+#  │         │                  └── value: bypass SSH entirely
+#  │         └── variable name: overrides the default SSH transport
+#  └── host name as Ansible knows it (not necessarily a real DNS name)
+localhost ansible_connection=local

@@ -1,0 +1,26 @@
+# db.changelog-master.yaml — the Liquibase master changelog
+#
+# This file is the ENTRY POINT Liquibase reads first (configured in liquibase.properties).
+# It does not contain changesets itself — it only includes other changelog files in order.
+#
+# WHY a master file?
+#   Separating the master from the individual changelogs lets you:
+#   - add new migration files without touching the master (just append an include)
+#   - keep each changeset file focused on one concern (schema, table, index, etc.)
+#   - control execution order by controlling the order of includes
+#
+# Execution order:
+#   Liquibase runs the included files TOP TO BOTTOM.
+#   001 always runs before 002. Never reorder existing entries once applied.
+#
+# include vs includeAll:
+#   include:     one specific file — explicit, predictable order (used here)
+#   includeAll:  every file in a folder alphabetically — convenient but less controlled
+
+databaseChangeLog:
+
+  - include:
+      file: changelog/001-create-schema.sql  # Step 1: create the paylite schema
+
+  - include:
+      file: changelog/002-create-table.sql   # Step 2: create the employee table inside paylite

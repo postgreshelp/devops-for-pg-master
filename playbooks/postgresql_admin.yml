@@ -1,0 +1,66 @@
+# postgresql_admin.yml — starter playbook
+# PURPOSE: verify Ansible can connect to PostgreSQL and run queries.
+# Think of this as the "hello world" before postgresql_admin_full.yml.
+#
+# Run it:
+#   ansible-playbook playbooks/postgresql_admin.yml
+#
+# Playbook anatomy:
+#
+# - name: PostgreSQL administrative tasks   ← play name (shown in terminal output)
+#   hosts: postgresql                        ← which inventory group to target
+#   gather_facts: false                      ← skip OS fact collection (not needed for DB tasks)
+#
+#   tasks:                                   ← ordered list of steps; runs top to bottom
+#     - name: ...                            ← task name (shown in terminal output)
+#       module.name:                         ← the Ansible module that does the work
+#         key: value                         ← module arguments
+#       register: variable_name             ← save the module's output into a variable
+
+---
+- name: PostgreSQL administrative tasks
+  hosts: postgresql      # matches the [postgresql] group in inventory/hosts
+  gather_facts: false    # no need to collect CPU/OS info — we only talk to the database
+
+  tasks:
+
+    # ── Task 1: run a query and capture the result ────────────────────────────
+    # community.postgresql.postgresql_query
+    #  │              │         │
+    #  │              │         └── module name
+    #  │              └── namespace (the collection installed via ansible-galaxy)
+    #  └── collection prefix
+    #
+    # login_* arguments come from group_vars/postgresql.yml via {{ }} Jinja2 templating.
+    # register: postgres_version — stores the full module return value in this variable.
+    - name: Check PostgreSQL version
+      community.postgresql.postgresql_query:
+        query: "SELECT version();"
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: postgres_version  # result is now in postgres_version.query_result
+
+    # ── Task 2: print the captured result ────────────────────────────────────
+    # ansible.builtin.debug prints a variable to the terminal — no connection needed.
+    # var: postgres_version.query_result accesses the list of rows returned by the query.
+    - name: Display PostgreSQL version
+      ansible.builtin.debug:
+        var: postgres_version.query_result
+
+    # ── Task 3: verify which database is active ───────────────────────────────
+    - name: Check current database
+      community.postgresql.postgresql_query:
+        query: "SELECT current_database();"
+        login_host:     "{{ postgresql_host }}"
+        login_port:     "{{ postgresql_port }}"
+        login_user:     "{{ postgresql_admin_user }}"
+        login_password: "{{ postgresql_admin_password }}"
+        login_db:       "{{ postgresql_database }}"
+      register: current_database
+
+    - name: Display current database
+      ansible.builtin.debug:
+        var: current_database.query_result

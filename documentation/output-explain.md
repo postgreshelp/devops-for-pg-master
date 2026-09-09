@@ -154,3 +154,115 @@ CREATE ROLE paylite_app WITH LOGIN PASSWORD 'PayliteApp123!';
           silence it by adding to group_vars/postgresql.yml:
           ansible_python_interpreter: /usr/bin/python3.9
 ```
+
+## Liquibase Tag & Rollback — Full Cycle
+
+---
+
+### `liquibase tag v1.0`
+
+```
+Successfully tagged 'postgres@jdbc:postgresql://bt01-aurora-instance-1...:5432/postgres'
+Liquibase command 'tag' was executed successfully.
+```
+
+```
+tag v1.0
+  |
+  └── bookmarks the current state in DATABASECHANGELOG
+      001 (create schema)  <- v1.0 tag written here
+      002 (create table)   <- v1.0 tag written here (last applied row gets the tag)
+```
+
+---
+
+### `liquibase update` — 003 failed first (typo), then succeeded
+
+**First attempt — SQL typo:**
+```
+Running Changeset: changelog/003-add-column.sql::003::paylite
+
+ERROR: syntax error at or near "tabe"
+  Position: 7
+[Failed SQL: (0) alter tabe paylite.employee add column salary2 int]
+```
+
+```
+alter tabe paylite.employee ...
+       ^^^^
+       typo — should be "table"
+       Liquibase sent the SQL to PostgreSQL, PostgreSQL rejected it
+       changeset 003 is NOT recorded in DATABASECHANGELOG
+       next liquibase update will retry 003 automatically
+```
+
+**Second attempt — typo fixed:**
+```
+Running Changeset: changelog/003-add-column.sql::003::paylite
+
+UPDATE SUMMARY
+Run:                          1
+Total change sets:            3
+
+Liquibase: Update has been successful.
+```
+
+```
+Run:           1   <- 003 applied now
+Previously run: 2  <- 001 and 002 already in DATABASECHANGELOG, skipped
+Filtered out:   0  <- nothing excluded
+Total:          3  <- master changelog has 3 includes
+```
+
+---
+
+### `liquibase tag v2.0`
+
+```
+Successfully tagged 'postgres@jdbc:postgresql://...'
+```
+
+```
+DATABASECHANGELOG state after v2.0 tag:
+
+| Changeset | Tag  |
+|-----------|------|
+| 001       |      |
+| 002       | v1.0 |  <- v1.0 written on last row at time of tagging
+| 003       | v2.0 |  <- v2.0 written on last row at time of tagging
+```
+
+---
+
+### `liquibase rollback --tag v1.0`
+
+```
+Rolling Back Changeset: changelog/003-add-column.sql::003::paylite
+Liquibase command 'rollback' was executed successfully.
+```
+
+```
+rollback --tag v1.0
+  |
+  └── find v1.0 in DATABASECHANGELOG
+      roll back everything applied AFTER v1.0, in reverse order
+      |
+      └── 003 (add column)  -> runs: ALTER TABLE paylite.employee DROP COLUMN salary2
+          002 and 001 untouched  <- they are AT or BEFORE v1.0
+
+DATABASECHANGELOG after rollback:
+
+| Changeset | Tag  |
+|-----------|------|
+| 001       |      |
+| 002       | v1.0 |  <- still here, untouched
+
+003 row removed — salary2 column dropped from paylite.employee
+```
+
+**Verify:**
+```bash
+liquibase history   # 003 row gone
+liquibase status    # shows 1 changeset pending (003 ready to re-apply)
+liquibase update    # re-applies 003 if needed
+```

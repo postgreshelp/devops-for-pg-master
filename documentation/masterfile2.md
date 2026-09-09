@@ -1,8 +1,8 @@
 
 ## in EC2
 cd /opt
-git clone https://github.com/postgreshelp/ansible-postgresql.git
-cd ansible-postgresql
+git clone https://github.com/postgreshelp/devops-for-pg-master.git
+cd devops-for-pg-master
 
 
 ### Install software
@@ -26,7 +26,7 @@ curl -L -o /opt/liquibase/lib/postgresql.jar https://jdbc.postgresql.org/downloa
 
 ### Files 
 ```
-[root@ip-10-10-1-234 ansible-postgresql]# find . -maxdepth 3 -type f
+[root@ip-10-10-1-234 devops-for-pg-master]# find . -maxdepth 3 -type f
 ./ansible.cfg
 ./inventory/hosts
 ./inventory/group_vars/postgresql.yml
@@ -45,12 +45,12 @@ curl -L -o /opt/liquibase/lib/postgresql.jar https://jdbc.postgresql.org/downloa
 ### commands
 
 ```
-[root@ip-10-10-1-234 ansible-postgresql]# ansible-inventory --graph
+[root@ip-10-10-1-234 devops-for-pg-master]# ansible-inventory --graph
 @all:
   |--@ungrouped:
   |--@postgresql:
   |  |--localhost
-[root@ip-10-10-1-234 ansible-postgresql]# ansible postgresql -m ping
+[root@ip-10-10-1-234 devops-for-pg-master]# ansible postgresql -m ping
 [WARNING]: Platform linux on host localhost is using the discovered Python interpreter at /usr/bin/python3.9, but future
 installation of another Python interpreter could change the meaning of that path. See https://docs.ansible.com/ansible-
 core/2.15/reference_appendices/interpreter_discovery.html for more information.
@@ -88,7 +88,7 @@ ansible-playbook playbooks/postgresql_admin_full.yml
 curl -L -o lib/postgresql.jar https://jdbc.postgresql.org/download/postgresql-42.7.8.jar
 ls -lh lib/postgresql.jar
 
- cd /opt/ansible-postgresql/liquibase
+ cd /opt/devops-for-pg-master/liquibase
 liquibase validate
 liquibase update
 liquibase status
@@ -138,8 +138,8 @@ sudo systemctl status jenkins
 sudo -u jenkins ansible-galaxy collection list | grep community.postgresql
 sudo -u jenkins ansible-galaxy collection install community.postgresql
 
- sudo -u jenkins env ANSIBLE_CONFIG=/opt/ansible-postgresql/ansible.cfg \
-ansible-playbook /opt/ansible-postgresql/playbooks/liquibase_deploy.yml
+ sudo -u jenkins env ANSIBLE_CONFIG=/opt/devops-for-pg-master/ansible.cfg \
+ansible-playbook /opt/devops-for-pg-master/playbooks/liquibase_deploy.yml
 ```
 
 
@@ -172,7 +172,7 @@ Build Steps → Add build step → Execute shell
 
 Enter:
 
-cd /root/ansible-postgresql
+cd /root/devops-for-pg-master
 
 ansible-playbook playbooks/liquibase_deploy.yml
 

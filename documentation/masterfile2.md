@@ -109,10 +109,10 @@ alter table paylite.employee add column salary2 int;
 edit db.changelog-master.yaml
 
 ```
-
+```
   - include:
       file: changelog/003-add-column.sql  # Step 3: add a column
-
+```
 ```
 
 ### Verify

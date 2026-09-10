@@ -1,0 +1,25 @@
+---
+- name: Create emp table on Aurora PostgreSQL
+	hosts: localhost
+	gather_facts: false
+	collections:
+		- community.postgresql
+
+	vars:
+		db_host: bt01-aurora.cluster-cijxwe4ckz1m.us-east-1.rds.amazonaws.com
+		db_name: postgres
+		db_user: postgres
+		db_password: "{{ lookup('env', 'PGPASSWORD') }}"
+
+	tasks:
+		- name: Create emp table
+			community.postgresql.postgresql_query:
+				login_host: "{{ db_host }}"
+				login_db: "{{ db_name }}"
+				login_user: "{{ db_user }}"
+				login_password: "{{ db_password }}"
+				query: |
+					CREATE TABLE IF NOT EXISTS emp (
+						id INT,
+						sal INT
+					);

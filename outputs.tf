@@ -23,7 +23,7 @@ output "default_vpc_id" {
 #          │       │        └── attribute  (the VPC ID Terraform just created)
 #          │       └── resource name  (local alias in aws-create-vpc.tf)
 #          └── resource type
-output "aws_vpc" {
-  description = "ID of the newly created VPC"
-  value       = aws_vpc.bt01_vpc.id
-}
+#output "aws_vpc" {
+#  description = "ID of the newly created VPC"
+#  value       = aws_vpc.bt01_vpc.id
+#}

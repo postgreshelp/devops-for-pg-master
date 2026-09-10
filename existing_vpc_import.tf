@@ -7,7 +7,7 @@
 #   Step 1 — write this resource block with arguments that MATCH the real VPC
 #   Step 2 — run: terraform import aws_vpc.default_import <vpc-id>
 #
-# terraform import aws_vpc.existing_vpc_import vpc-02f476ec787e998c6
+# terraform import aws_vpc.existing_vpc_import vpc-0566c043faf777617
 #                   │       │              │
 #                   │       │              └── real AWS resource ID (from aws ec2 describe-vpcs)
 #                   │       └── resource name in this file (must exist before you import)
@@ -18,11 +18,11 @@
 # import. If it proposes changes, fix this file's values to match reality
 # (copy them from `terraform show` or the AWS console) before applying.
 resource "aws_vpc" "existing_vpc_import" {
-  cidr_block           = "172.31.0.0/16" # must match the real VPC's CIDR exactly
+  cidr_block           = "10.50.0.0/16" # must match the real VPC's CIDR exactly
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
-    Name = "B02_VPC"
+    Name = "B02-VPC"
   }
 }

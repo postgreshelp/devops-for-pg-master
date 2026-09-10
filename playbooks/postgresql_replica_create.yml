@@ -1,0 +1,19 @@
+---
+- name: Add Aurora PostgreSQL reader
+	hosts: localhost
+	connection: local
+	gather_facts: false
+	vars:
+		aws_region: us-east-1
+		db_cluster_identifier: bt01-aurora
+		reader_identifier: bt01-aurora-reader-1
+
+	tasks:
+		- name: Create reader instance
+			amazon.aws.rds_instance:
+				state: present
+				region: "{{ aws_region }}"
+				db_instance_identifier: "{{ reader_identifier }}"
+				db_cluster_identifier: "{{ db_cluster_identifier }}"
+				engine: aurora-postgresql
+				db_instance_class: db.t4g.medium

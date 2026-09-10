@@ -1,9 +1,17 @@
 
 ## in EC2
+```
 cd /opt
 git clone https://github.com/postgreshelp/devops-for-pg-master.git
 cd devops-for-pg-master
+```
 
+## To reset URL
+
+```
+git remote set-url origin https://github.com/postgreshelp/b04-devops-for-pg-master.git
+git remote -v
+```
 
 ### Install software
 

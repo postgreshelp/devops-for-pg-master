@@ -72,7 +72,7 @@
 # The Aurora RDS cluster endpoint provisioned by Terraform in aws-aurora.tf.
 # This is the hostname Ansible AND Liquibase both connect to.
 # If you rebuild the Aurora cluster, update this value — nothing else changes.
-postgresql_host: "mypgrds.cijxwe4ckz1m.us-east-1.rds.amazonaws.com"
+postgresql_host: "bt01-aurora-instance-1.cijxwe4ckz1m.us-east-1.rds.amazonaws.com"
 
 # Default PostgreSQL port.
 # Aurora PostgreSQL uses 5432 — change only if your cluster is on a custom port.

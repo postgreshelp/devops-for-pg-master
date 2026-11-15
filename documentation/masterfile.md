@@ -160,7 +160,7 @@ Apply the changes
 ```
 terraform init
 terraform apply
-
+```
 (or) Run the below commands
 
 ```

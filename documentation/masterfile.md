@@ -146,12 +146,22 @@ resource "aws_vpc" "default-import" {
   enable_dns_hostnames = true
 
   tags = {
-    Name = "default-import"
+    Name = "B02-VPC"
   }
 }
-```
 
-Run the below commands
+import {
+  to = aws_vpc.default-import
+  id = "vpc-060f5f0334e4a83bc"
+}
+```
+Apply the changes
+
+```
+terraform init
+terraform apply
+
+(or) Run the below commands
 
 ```
 Terraform init

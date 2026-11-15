@@ -198,6 +198,14 @@ your Terraform state and will henceforth be managed by Terraform.
 
 PS C:\Users\hp\Documents\Course\NewTerraform> 
 ```
+
+### Remove the state from terraform
+
+```
+terraform state list
+terraform state show aws_vpc.default-import
+```
+
 #### Push everything to get
 
 ### To remove everything from git

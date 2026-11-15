@@ -220,7 +220,11 @@ terraform state show aws_vpc.default-import
 ```
 terraform plan -target="data.aws_vpc.default"
 terraform apply -target="data.aws_vpc.default"
+```
+
 #### Push everything to get
+
+
 
 ### To remove everything from git
 

@@ -215,7 +215,11 @@ PS C:\Users\hp\Documents\Course\NewTerraform>
 terraform state list
 terraform state show aws_vpc.default-import
 ```
+### Rerun the same command
 
+```
+terraform plan -target="data.aws_vpc.default"
+terraform apply -target="data.aws_vpc.default"
 #### Push everything to get
 
 ### To remove everything from git

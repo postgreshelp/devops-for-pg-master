@@ -129,9 +129,9 @@ PS C:\Users\hp\Documents\Course\NewTerraform>
 ### 2. Import an existing VPC into Terraform
 
 ### Get the CIDR for your VPC
-
+```
 aws ec2 describe-vpcs --vpc-ids vpc-02f476ec787e998c6
-
+```
 expected output
 ```
 10.10.0.0/16

@@ -1,0 +1,92 @@
+# postgresql_admin.yml — starter playbook
+# PURPOSE: verify Ansible can connect to PostgreSQL and run queries.
+# Think of this as the "hello world" before postgresql_admin_full.yml.
+#
+# Run it:
+#   ansible-playbook playbooks/postgresql_admin.yml
+#
+# Playbook anatomy:
+#
+# - name: ...            ← play name (shown in terminal output)
+#   hosts: postgresql    ← which inventory group to target
+#   gather_facts: false  ← skip OS fact collection (not needed for DB tasks)
+#   environment:         ← environment variables set for every task in the play
+#   tasks:               ← ordered list of steps; runs top to bottom
+#     - name: ...        ← task name (shown in terminal output)
+#       module.name:     ← the Ansible module that does the work
+#         key: value     ← module arguments
+#       register: var    ← save the module's output into a variable
+#
+# WHY PGPASSWORD instead of login_password:
+#   login_password is a no_log parameter. Ansible hides any output value that
+#   equals it. Here password, user and database are all "postgres", so query
+#   results would show VALUE_SPECIFIED_IN_NO_LOG_PARAMETER.
+#   libpq reads PGPASSWORD from the environment, so the module connects the
+#   same way, but nothing is masked.
+
+---
+- name: PostgreSQL administrative tasks
+  hosts: postgresql      # matches the [postgresql] group in inventory/hosts
+  gather_facts: false    # we only talk to the database, no OS facts needed
+
+  environment:
+    PGPASSWORD: "{{ postgresql_admin_password }}"
+
+  tasks:
+
+    # Task 1: Check PostgreSQL version
+    # login_* values come from inventory/group_vars/postgresql.yml
+    - name: Check PostgreSQL version
+      community.postgresql.postgresql_query:
+        query: "SELECT version() AS version;"
+        login_host: "{{ postgresql_host }}"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ postgresql_admin_user }}"
+        login_db: "{{ postgresql_database }}"
+      register: postgres_version
+
+    - name: Display PostgreSQL version
+      ansible.builtin.debug:
+        var: postgres_version.query_result
+
+    # Task 2: Verify which database is active
+    - name: Check current database
+      community.postgresql.postgresql_query:
+        query: "SELECT current_database() AS current_database;"
+        login_host: "{{ postgresql_host }}"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ postgresql_admin_user }}"
+        login_db: "{{ postgresql_database }}"
+      register: current_database
+
+    - name: Display current database
+      ansible.builtin.debug:
+        var: current_database.query_result
+
+    # Task 3: Verify which user is connected
+    - name: Check current PostgreSQL user
+      community.postgresql.postgresql_query:
+        query: "SELECT current_user AS current_user;"
+        login_host: "{{ postgresql_host }}"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ postgresql_admin_user }}"
+        login_db: "{{ postgresql_database }}"
+      register: current_user
+
+    - name: Display current PostgreSQL user
+      ansible.builtin.debug:
+        var: current_user.query_result
+
+    # Task 4: When was the server started
+    - name: Check PostgreSQL server start time
+      community.postgresql.postgresql_query:
+        query: "SELECT pg_postmaster_start_time() AS start_time;"
+        login_host: "{{ postgresql_host }}"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ postgresql_admin_user }}"
+        login_db: "{{ postgresql_database }}"
+      register: start_time
+
+    - name: Display PostgreSQL server start time
+      ansible.builtin.debug:
+        var: start_time.query_result

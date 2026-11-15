@@ -11,7 +11,15 @@ git init
 git config user.name "Y_USER_NAME"
 git config user.email "Y_USER_EMAIL"
 
-git remote add origin https://github.com/postgreshelp/NewTerraform.git
+
+ssh-keygen -t ed25519 -C "postgreshelp@ec2" -f ~/.ssh/id_ed25519
+# press Enter for no passphrase, or set one
+cat ~/.ssh/id_ed25519.pub
+
+Add it to GitHub. You have two options:
+ssh -T git@github.com
+
+git remote set-url origin git@github.com:postgreshelp/devops-for-pg-master-11.git
 
 git add .
 

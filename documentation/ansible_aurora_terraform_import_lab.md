@@ -71,7 +71,7 @@ ansible-galaxy collection install amazon.aws
 
 ```bash
 dnf install python3-pip -y
-pip3 install boto3
+pip3 install boto3 botocore
 ```
 
 Verify:

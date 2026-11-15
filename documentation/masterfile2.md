@@ -232,3 +232,18 @@ Set it to something below your /tmp size, for example:
 500 MB
 
 If Jenkins shows the threshold in bytes, use:
+
+
+
+
+### fleet demo
+
+```
+cd /opt/devops-for-pg-master
+tar xzf fleet-demo.tgz          # edit the endpoints in inventory_fleet/hosts first
+
+ansible-inventory -i inventory_fleet --graph                         # show the groups
+ansible-playbook  -i inventory_fleet playbooks/fleet_health.yml      # all 4 at once
+ansible-playbook  -i inventory_fleet playbooks/fleet_health.yml --limit aurora
+ansible-playbook  -i inventory_fleet playbooks/fleet_health.yml -f 20   # 20 databases in parallel
+```
